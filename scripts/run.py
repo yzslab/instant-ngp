@@ -360,7 +360,7 @@ if __name__ == "__main__":
 		psnr_avgmse = mse2psnr(totmse/(totcount or 1))
 		psnr = totpsnr/(totcount or 1)
 		ssim = totssim/(totcount or 1)
-		print(f"PSNR={psnr} [min={minpsnr} max={maxpsnr}] SSIM={ssim}")
+		print(f"PSNR={psnr:.3f} [min={minpsnr:.3f} max={maxpsnr:.3f}] SSIM={ssim:.3f}")
 
 	if args.save_mesh:
 		res = args.marching_cubes_res or 256
