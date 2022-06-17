@@ -30,10 +30,12 @@ def parse_args():
 
 	parser.add_argument("--scene", "--training_data", default="", help="The scene to load. Can be the scene's name or a full path to the training data.")
 	parser.add_argument("--mode", default="", const="nerf", nargs="?", choices=["nerf", "sdf", "image", "volume"], help="Mode can be 'nerf', 'sdf', or 'image' or 'volume'. Inferred from the scene if unspecified.")
+	parser.add_argument("--name", default="")
 	parser.add_argument("--network", default="", help="Path to the network config. Uses the scene's default if unspecified.")
 
 	parser.add_argument("--load_snapshot", default="", help="Load this snapshot before training. recommended extension: .msgpack")
 	parser.add_argument("--save_snapshot", default="", help="Save this snapshot after training. recommended extension: .msgpack")
+	parser.add_argument("--save_per_n", default=0)
 
 	parser.add_argument("--nerf_compatibility", action="store_true", help="Matches parameters with original NeRF. Can cause slowness and worse results on some scenes.")
 	parser.add_argument("--test_transforms", default="", help="Path to a nerf style transforms json from which we will compute PSNR.")
@@ -43,6 +45,13 @@ def parse_args():
 	parser.add_argument("--screenshot_frames", nargs="*", help="Which frame(s) to take screenshots of.")
 	parser.add_argument("--screenshot_dir", default="", help="Which directory to output screenshots to.")
 	parser.add_argument("--screenshot_spp", type=int, default=16, help="Number of samples per pixel in screenshots.")
+
+	parser.add_argument("--camera_path", default="")
+	parser.add_argument("--video_seconds", default=0)
+	parser.add_argument("--video_fps", default=30)
+
+	parser.add_argument("--max_time", default=0)
+	parser.add_argument("--time_offset", default=0)
 
 	parser.add_argument("--save_mesh", default="", help="Output a marching-cubes based mesh from the NeRF or SDF model. Supports OBJ and PLY format.")
 	parser.add_argument("--marching_cubes_res", default=256, type=int, help="Sets the resolution for the marching cubes grid.")
@@ -116,6 +125,10 @@ if __name__ == "__main__":
 
 	if args.load_snapshot:
 		print("Loading snapshot ", args.load_snapshot)
+		if os.path.exists(args.load_snapshot) == False:
+			args.load_snapshot = os.path.join(os.path.dirname(args.scene), "snapshots", args.name, args.load_snapshot)
+		if os.path.exists(args.load_snapshot) == False:
+			args.load_snapshot = args.load_snapshot + ".msgpack"
 		testbed.load_snapshot(args.load_snapshot)
 	else:
 		testbed.reload_network_from_file(network)
@@ -173,15 +186,61 @@ if __name__ == "__main__":
 
 	old_training_step = 0
 	n_steps = args.n_steps
-	if n_steps < 0:
-		n_steps = 100000
+
+	timepoints = [5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1200, 1800, 3600, 7200]
+	timepoint_count = len(timepoints)
+	current_timepoint = 0
+
+	time_offset = int(args.time_offset)
+	if time_offset > 0:
+		while (current_timepoint < timepoint_count):
+			if timepoints[current_timepoint] > time_offset:
+				break
+			current_timepoint += 1
+
+	print(f"target timepoint: timepoints[{current_timepoint}]={timepoints[current_timepoint]}")
+
+	if args.save_snapshot == "1":
+		args.save_snapshot = os.path.join(os.path.dirname(args.scene), "snapshots", args.name)
+		os.makedirs(args.save_snapshot, exist_ok=True)
+
+	args.save_per_n = int(args.save_per_n)
+
+	args.max_time = int(args.max_time)
+
+	snapshot_save_time = 0
 
 	tqdm_last_update = 0
+
+	trained_steps = testbed.training_step
+
+	def save_snapshot(name):
+		save_path = args.save_snapshot + "/" + str(name) + ".msgpack"
+		print(f"Saving snapshot to ", save_path)
+		snapshot_save_started_at = time.time()
+		testbed.save_snapshot(save_path, False)
+		return time.time() - snapshot_save_started_at
+
 	if n_steps > 0:
 		with tqdm(desc="Training", total=n_steps, unit="step") as t:
 			while testbed.frame():
 				if testbed.want_repl():
 					repl(testbed)
+
+				trained_steps = testbed.training_step
+
+				if testbed.shall_train is True and args.save_snapshot and (t.format_dict['elapsed'] + time_offset) >= timepoints[current_timepoint]:
+					snapshot_save_time += save_snapshot(str(timepoints[current_timepoint]) + "s")
+					current_timepoint = current_timepoint + 1
+					if current_timepoint >= timepoint_count:
+						break
+
+				if args.save_per_n > 0 and trained_steps > 0 and trained_steps % args.save_per_n == 0:
+					snapshot_save_time += save_snapshot(trained_steps)
+
+				if args.max_time and t.format_dict['elapsed'] + time_offset >= args.max_time:
+					break
+
 				# What will happen when training is done?
 				if testbed.training_step >= n_steps:
 					if args.gui:
@@ -201,11 +260,19 @@ if __name__ == "__main__":
 					old_training_step = testbed.training_step
 					tqdm_last_update = now
 
-	if args.save_snapshot:
+	print(f"Save snapshot consumed: {snapshot_save_time}")
+
+	if args.save_snapshot and trained_steps > 0:
 		print("Saving snapshot ", args.save_snapshot)
-		testbed.save_snapshot(args.save_snapshot, False)
+		testbed.save_snapshot(os.path.join(args.save_snapshot, str(trained_steps) + ".msgpack"), False)
 
 	if args.test_transforms:
+		if os.path.exists(args.test_transforms) == False:
+			args.test_transforms = os.path.join(os.path.dirname(args.scene), args.test_transforms)
+
+		save_dir = os.path.join(os.path.dirname(args.scene), "test_transforms", args.name)
+		os.makedirs(save_dir, exist_ok=True)
+
 		print("Evaluating test transforms from ", args.test_transforms)
 		with open(args.test_transforms) as f:
 			test_transforms = json.load(f)
@@ -262,19 +329,20 @@ if __name__ == "__main__":
 					ref_image += (1.0 - ref_image[...,3:4]) * testbed.background_color
 					ref_image[...,:3] = srgb_to_linear(ref_image[...,:3])
 
-				if i == 0:
-					write_image("ref.png", ref_image)
-
 				testbed.set_nerf_camera_matrix(np.matrix(frame["transform_matrix"])[:-1,:])
 				image = testbed.render(ref_image.shape[1], ref_image.shape[0], spp, True)
 
-				if i == 0:
-					write_image("out.png", image)
+
+				if ref_image.shape[2] == 3:
+					image = image[:, :, :-1]
 
 				diffimg = np.absolute(image - ref_image)
 				diffimg[...,3:4] = 1.0
-				if i == 0:
-					write_image("diff.png", diffimg)
+
+				filename = os.path.basename(frame["file_path"])
+				write_image(os.path.join(save_dir, "{}_ref.png".format(filename)), ref_image)
+				write_image(os.path.join(save_dir, "{}_out.png".format(filename)), image)
+				write_image(os.path.join(save_dir, "{}_diff.png".format(filename)), diffimg)
 
 				A = np.clip(linear_to_srgb(image[...,:3]), 0.0, 1.0)
 				R = np.clip(linear_to_srgb(ref_image[...,:3]), 0.0, 1.0)
@@ -300,7 +368,16 @@ if __name__ == "__main__":
 		testbed.compute_and_save_marching_cubes_mesh(args.save_mesh, [res, res, res])
 
 	if args.width:
-		if ref_transforms:
+		if args.camera_path:
+			testbed.load_camera_path(args.camera_path)
+			numframes = int(args.video_seconds) * int(args.video_fps)
+			exposure = 0
+			for i in tqdm(list(range(min(numframes, numframes+1))), unit="frames", desc=f"Rendering"):
+				testbed.camera_smoothing = False
+				frame = testbed.render(args.width, args.height, args.screenshot_spp, True, float(i) / numframes,
+									   float(i + 1) / numframes, int(args.video_fps), shutter_fraction=0.5)
+				write_image(f"{i:04d}.jpg", np.clip(frame * 2 ** exposure, 0.0, 1.0), quality=100)
+		elif ref_transforms:
 			testbed.fov_axis = 0
 			testbed.fov = ref_transforms["camera_angle_x"] * 180 / np.pi
 			if not args.screenshot_frames:
@@ -317,13 +394,17 @@ if __name__ == "__main__":
 					outname = outname + ".png"
 
 				print(f"rendering {outname}")
+				start_rendering_at = time.time()
 				image = testbed.render(args.width or int(ref_transforms["w"]), args.height or int(ref_transforms["h"]), args.screenshot_spp, True)
+				print(f"{outname} rendered, {time.time() - start_rendering_at} elapsed")
 				os.makedirs(os.path.dirname(outname), exist_ok=True)
 				write_image(outname, image)
 		elif args.screenshot_dir:
 			outname = os.path.join(args.screenshot_dir, args.scene + "_" + network_stem)
 			print(f"Rendering {outname}.png")
+			start_rendering_at = time.time()
 			image = testbed.render(args.width, args.height, args.screenshot_spp, True)
+			print(f"{outname} rendered, {time.time() - start_rendering_at} elapsed")
 			if os.path.dirname(outname) != "":
 				os.makedirs(os.path.dirname(outname), exist_ok=True)
 			write_image(outname + ".png", image)
