@@ -1,0 +1,12 @@
+{
+	"parent": "base.json",
+	"network": {
+		"n_neurons": 128,
+		"n_hidden_layers": 2
+	},
+	"rgb_network": {
+		"n_neurons": 128,
+		"n_hidden_layers": 4
+	}
+}
+
