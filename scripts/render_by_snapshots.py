@@ -49,7 +49,7 @@ if __name__ == "__main__":
 	if args.frames:
 		for i in args.frames:
 			for j in ref_transforms["frames"]:
-				if j["file_path"].find(i) >= 0:
+				if j["file_path"].find("/" + str(i) + ".") >= 0:
 					frameList[i] = j
 	else:
 		for j in ref_transforms["frames"]:
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 		configs_dir = os.path.join(ROOT_DIR, "configs", "nerf")
 		scenes = scenes_nerf
 		testbed = ngp.Testbed(mode)
-		testbed.background_color = [255., 255., 255., 1.0]
+		# testbed.background_color = [255., 255., 255., 1.0]
 		testbed.nerf.sharpen = float(0)
 
 		if not os.path.isfile(filepath):

@@ -52,8 +52,8 @@ def run_ffmpeg(args):
 	video =  "\"" + args.video_in + "\""
 	fps = float(args.video_fps) or 1.0
 	print(f"running ffmpeg with input video file={video}, output image folder={images}, fps={fps}.")
-	if (input(f"warning! folder '{images}' will be deleted/replaced. continue? (Y/n)").lower().strip()+"y")[:1] != "y":
-		sys.exit(1)
+	# if (input(f"warning! folder '{images}' will be deleted/replaced. continue? (Y/n)").lower().strip()+"y")[:1] != "y":
+	# 	sys.exit(1)
 	try:
 		# Passing Images' Path Without Double Quotes
 		shutil.rmtree(args.images)
@@ -78,8 +78,8 @@ def run_colmap(args):
 	text=args.text
 	sparse=db_noext+"_sparse"
 	print(f"running colmap with:\n\tdb={db}\n\timages={images}\n\tsparse={sparse}\n\ttext={text}")
-	if (input(f"warning! folders '{sparse}' and '{text}' will be deleted/replaced. continue? (Y/n)").lower().strip()+"y")[:1] != "y":
-		sys.exit(1)
+	# if (input(f"warning! folders '{sparse}' and '{text}' will be deleted/replaced. continue? (Y/n)").lower().strip()+"y")[:1] != "y":
+	# 	sys.exit(1)
 	if os.path.exists(db):
 		os.remove(db)
 	do_system(f"colmap feature_extractor --ImageReader.camera_model OPENCV --SiftExtraction.estimate_affine_shape=true --SiftExtraction.domain_size_pooling=true --ImageReader.single_camera 1 --database_path {db} --image_path {images}")
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 			f["transform_matrix"] = np.matmul(f["transform_matrix"], flip_mat) # flip cameras (it just works)
 	else:
 		# don't keep colmap coords - reorient the scene to be easier to work with
-		
+
 		up = up / np.linalg.norm(up)
 		print("up vector was", up)
 		R = rotmat(up,[0,0,1]) # rotate up vector to [0,0,1]
@@ -287,7 +287,7 @@ if __name__ == "__main__":
 
 		for f in out["frames"]:
 			f["transform_matrix"] = np.matmul(R, f["transform_matrix"]) # rotate up to be the z axis
-		
+
 		# find a central point they are all looking at
 		print("computing center of attention...")
 		totw = 0.0

@@ -39,6 +39,7 @@ def parse_args():
 
 	parser.add_argument("--nerf_compatibility", action="store_true", help="Matches parameters with original NeRF. Can cause slowness and worse results on some scenes.")
 	parser.add_argument("--test_transforms", default="", help="Path to a nerf style transforms json from which we will compute PSNR.")
+	parser.add_argument("--test_max", default=0)
 	parser.add_argument("--near_distance", default=-1, type=float, help="set the distance from the camera at which training rays start for nerf. <0 means use ngp default")
 
 	parser.add_argument("--screenshot_transforms", default="", help="Path to a nerf style transforms.json from which to save screenshots.")
@@ -298,8 +299,15 @@ if __name__ == "__main__":
 		testbed.fov = test_transforms["camera_angle_x"] * 180 / np.pi
 		testbed.shall_train = False
 
-		with tqdm(list(enumerate(test_transforms["frames"])), unit="images", desc=f"Rendering test frame") as t:
-			for i, frame in t:
+		args.test_max = int(args.test_max)
+		total_frame_count = len(test_transforms["frames"])
+		if args.test_max == 0:
+			args.test_max = total_frame_count
+		test_per_n = total_frame_count // args.test_max
+		with tqdm(list(range(0, args.test_max)), unit="images", desc=f"Rendering test frame") as t:
+			for i in t:
+				frame = test_transforms["frames"][test_per_n * i]
+
 				p = frame["file_path"]
 				if "." not in p:
 					p = p + ".png"
