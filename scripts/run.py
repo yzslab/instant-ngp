@@ -286,7 +286,7 @@ if __name__ == "__main__":
 		maxpsnr = 0
 
 		# Evaluate metrics on black background
-		testbed.background_color = [0.0, 0.0, 0.0, 1.0]
+		testbed.background_color = [0.0, 0.0, 0.0, 0.0]
 
 		# Prior nerf papers don't typically do multi-sample anti aliasing.
 		# So snap all pixels to the pixel centers.
@@ -304,71 +304,76 @@ if __name__ == "__main__":
 		if args.test_max == 0:
 			args.test_max = total_frame_count
 		test_per_n = total_frame_count // args.test_max
-		with tqdm(list(range(0, args.test_max)), unit="images", desc=f"Rendering test frame") as t:
-			for i in t:
-				frame = test_transforms["frames"][test_per_n * i]
 
-				p = frame["file_path"]
-				if "." not in p:
-					p = p + ".png"
-				ref_fname = os.path.join(data_dir, p)
-				if not os.path.isfile(ref_fname):
-					ref_fname = os.path.join(data_dir, p + ".png")
+		with open(os.path.join(save_dir, "PSNR-SSIM.txt"), "w") as f:
+			with tqdm(list(range(0, args.test_max)), unit="images", desc=f"Rendering test frame") as t:
+				for i in t:
+					frame = test_transforms["frames"][test_per_n * i]
+
+					p = frame["file_path"]
+					if "." not in p:
+						p = p + ".png"
+					ref_fname = os.path.join(data_dir, p)
 					if not os.path.isfile(ref_fname):
-						ref_fname = os.path.join(data_dir, p + ".jpg")
+						ref_fname = os.path.join(data_dir, p + ".png")
 						if not os.path.isfile(ref_fname):
-							ref_fname = os.path.join(data_dir, p + ".jpeg")
+							ref_fname = os.path.join(data_dir, p + ".jpg")
 							if not os.path.isfile(ref_fname):
-								ref_fname = os.path.join(data_dir, p + ".exr")
+								ref_fname = os.path.join(data_dir, p + ".jpeg")
+								if not os.path.isfile(ref_fname):
+									ref_fname = os.path.join(data_dir, p + ".exr")
 
-				ref_image = read_image(ref_fname)
+					ref_image = read_image(ref_fname)
 
-				# NeRF blends with background colors in sRGB space, rather than first
-				# transforming to linear space, blending there, and then converting back.
-				# (See e.g. the PNG spec for more information on how the `alpha` channel
-				# is always a linear quantity.)
-				# The following lines of code reproduce NeRF's behavior (if enabled in
-				# testbed) in order to make the numbers comparable.
-				if testbed.color_space == ngp.ColorSpace.SRGB and ref_image.shape[2] == 4:
-					# Since sRGB conversion is non-linear, alpha must be factored out of it
-					ref_image[...,:3] = np.divide(ref_image[...,:3], ref_image[...,3:4], out=np.zeros_like(ref_image[...,:3]), where=ref_image[...,3:4] != 0)
-					ref_image[...,:3] = linear_to_srgb(ref_image[...,:3])
-					ref_image[...,:3] *= ref_image[...,3:4]
-					ref_image += (1.0 - ref_image[...,3:4]) * testbed.background_color
-					ref_image[...,:3] = srgb_to_linear(ref_image[...,:3])
+					# NeRF blends with background colors in sRGB space, rather than first
+					# transforming to linear space, blending there, and then converting back.
+					# (See e.g. the PNG spec for more information on how the `alpha` channel
+					# is always a linear quantity.)
+					# The following lines of code reproduce NeRF's behavior (if enabled in
+					# testbed) in order to make the numbers comparable.
+					if testbed.color_space == ngp.ColorSpace.SRGB and ref_image.shape[2] == 4:
+						# Since sRGB conversion is non-linear, alpha must be factored out of it
+						ref_image[...,:3] = np.divide(ref_image[...,:3], ref_image[...,3:4], out=np.zeros_like(ref_image[...,:3]), where=ref_image[...,3:4] != 0)
+						ref_image[...,:3] = linear_to_srgb(ref_image[...,:3])
+						ref_image[...,:3] *= ref_image[...,3:4]
+						ref_image += (1.0 - ref_image[...,3:4]) * testbed.background_color
+						ref_image[...,:3] = srgb_to_linear(ref_image[...,:3])
 
-				testbed.set_nerf_camera_matrix(np.matrix(frame["transform_matrix"])[:-1,:])
-				image = testbed.render(ref_image.shape[1], ref_image.shape[0], spp, True)
+					testbed.set_nerf_camera_matrix(np.matrix(frame["transform_matrix"])[:-1,:])
+					image = testbed.render(ref_image.shape[1], ref_image.shape[0], spp, True)
 
 
-				if ref_image.shape[2] == 3:
-					image = image[:, :, :-1]
+					if ref_image.shape[2] == 3:
+						image = image[:, :, :-1]
 
-				diffimg = np.absolute(image - ref_image)
-				diffimg[...,3:4] = 1.0
+					diffimg = np.absolute(image - ref_image)
+					diffimg[...,3:4] = 1.0
 
-				filename = os.path.basename(frame["file_path"])
-				write_image(os.path.join(save_dir, "{}_ref.png".format(filename)), ref_image)
-				write_image(os.path.join(save_dir, "{}_out.png".format(filename)), image)
-				write_image(os.path.join(save_dir, "{}_diff.png".format(filename)), diffimg)
+					filename = os.path.basename(frame["file_path"])
+					write_image(os.path.join(save_dir, "{}_ref.png".format(filename)), ref_image)
+					write_image(os.path.join(save_dir, "{}_out.png".format(filename)), image)
+					write_image(os.path.join(save_dir, "{}_diff.png".format(filename)), diffimg)
 
-				A = np.clip(linear_to_srgb(image[...,:3]), 0.0, 1.0)
-				R = np.clip(linear_to_srgb(ref_image[...,:3]), 0.0, 1.0)
-				mse = float(compute_error("MSE", A, R))
-				ssim = float(compute_error("SSIM", A, R))
-				totssim += ssim
-				totmse += mse
-				psnr = mse2psnr(mse)
-				totpsnr += psnr
-				minpsnr = psnr if psnr<minpsnr else minpsnr
-				maxpsnr = psnr if psnr>maxpsnr else maxpsnr
-				totcount = totcount+1
-				t.set_postfix(psnr = totpsnr/(totcount or 1))
+					A = np.clip(linear_to_srgb(image[...,:3]), 0.0, 1.0)
+					R = np.clip(linear_to_srgb(ref_image[...,:3]), 0.0, 1.0)
+					mse = float(compute_error("MSE", A, R))
+					ssim = float(compute_error("SSIM", A, R))
+					totssim += ssim
+					totmse += mse
+					psnr = mse2psnr(mse)
+					totpsnr += psnr
+					minpsnr = psnr if psnr<minpsnr else minpsnr
+					maxpsnr = psnr if psnr>maxpsnr else maxpsnr
+					totcount = totcount+1
+					t.set_postfix(psnr = totpsnr/(totcount or 1))
 
-		psnr_avgmse = mse2psnr(totmse/(totcount or 1))
-		psnr = totpsnr/(totcount or 1)
-		ssim = totssim/(totcount or 1)
-		print(f"PSNR={psnr:.3f} [min={minpsnr:.3f} max={maxpsnr:.3f}] SSIM={ssim:.3f}")
+					f.write(f"{filename}: PSNR={psnr:.3f}, SSIM={ssim:.3f}\n")
+
+			psnr_avgmse = mse2psnr(totmse/(totcount or 1))
+			psnr = totpsnr/(totcount or 1)
+			ssim = totssim/(totcount or 1)
+			print(f"PSNR={psnr:.3f} [min={minpsnr:.3f} max={maxpsnr:.3f}] SSIM={ssim:.3f}")
+			f.write(f"PSNR={psnr:.3f} [min={minpsnr:.3f} max={maxpsnr:.3f}] SSIM={ssim:.3f}")
 
 	if args.save_mesh:
 		res = args.marching_cubes_res or 256

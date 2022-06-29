@@ -63,7 +63,7 @@ if __name__ == "__main__":
 		configs_dir = os.path.join(ROOT_DIR, "configs", "nerf")
 		scenes = scenes_nerf
 		testbed = ngp.Testbed(mode)
-		# testbed.background_color = [255., 255., 255., 1.0]
+		testbed.background_color = [1.0, 1.0, 1.0, 1.0]
 		testbed.nerf.sharpen = float(0)
 
 		if not os.path.isfile(filepath):
