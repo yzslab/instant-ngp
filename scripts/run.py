@@ -188,7 +188,7 @@ if __name__ == "__main__":
 	old_training_step = 0
 	n_steps = args.n_steps
 
-	timepoints = [7200]
+	timepoints = [7200, 86400]
 	timepoint_count = len(timepoints)
 	current_timepoint = 0
 
