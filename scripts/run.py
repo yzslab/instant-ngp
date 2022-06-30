@@ -15,7 +15,7 @@ import commentjson as json
 import numpy as np
 
 import sys
-import time
+import time, datetime
 
 from common import *
 from scenes import scenes_nerf, scenes_image, scenes_sdf, scenes_volume, setup_colored_sdf
@@ -188,7 +188,7 @@ if __name__ == "__main__":
 	old_training_step = 0
 	n_steps = args.n_steps
 
-	timepoints = [5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1200, 1800, 3600, 7200]
+	timepoints = [7200]
 	timepoint_count = len(timepoints)
 	current_timepoint = 0
 
@@ -223,43 +223,54 @@ if __name__ == "__main__":
 		return time.time() - snapshot_save_started_at
 
 	if n_steps > 0:
-		with tqdm(desc="Training", total=n_steps, unit="step") as t:
-			while testbed.frame():
-				if testbed.want_repl():
-					repl(testbed)
+		log_directory = os.path.join(os.path.dirname(args.scene), "logs")
+		os.makedirs(log_directory, exist_ok=True)
+		name = args.name
+		if name == "":
+			name = "_"
+		logfile_path = os.path.join(log_directory, name + ".log")
+		with open(logfile_path, "a") as logfile:
+			logfile.write(f"=== training started at {datetime.datetime.now()} ===\n")
+			with tqdm(desc="Training", total=n_steps, unit="step") as t:
+				while testbed.frame():
+					if testbed.want_repl():
+						repl(testbed)
 
-				trained_steps = testbed.training_step
+					trained_steps = testbed.training_step
 
-				if testbed.shall_train is True and args.save_snapshot and (t.format_dict['elapsed'] + time_offset) >= timepoints[current_timepoint]:
-					snapshot_save_time += save_snapshot(str(timepoints[current_timepoint]) + "s")
-					current_timepoint = current_timepoint + 1
-					if current_timepoint >= timepoint_count:
+					if testbed.training_step % 100 == 0:
+						logfile.write(f"{time.time()} {testbed.training_step} {testbed.loss}\n")
+
+					if testbed.shall_train is True and args.save_snapshot and (t.format_dict['elapsed'] + time_offset) >= timepoints[current_timepoint]:
+						snapshot_save_time += save_snapshot(str(timepoints[current_timepoint]) + "s")
+						current_timepoint = current_timepoint + 1
+						if current_timepoint >= timepoint_count:
+							break
+
+					if args.save_per_n > 0 and trained_steps > 0 and trained_steps % args.save_per_n == 0:
+						snapshot_save_time += save_snapshot(trained_steps)
+
+					if args.max_time and t.format_dict['elapsed'] + time_offset >= args.max_time:
 						break
 
-				if args.save_per_n > 0 and trained_steps > 0 and trained_steps % args.save_per_n == 0:
-					snapshot_save_time += save_snapshot(trained_steps)
+					# What will happen when training is done?
+					if testbed.training_step >= n_steps:
+						if args.gui:
+							testbed.shall_train = False
+						else:
+							break
 
-				if args.max_time and t.format_dict['elapsed'] + time_offset >= args.max_time:
-					break
+					# Update progress bar
+					if testbed.training_step < old_training_step or old_training_step == 0:
+						old_training_step = 0
+						t.reset()
 
-				# What will happen when training is done?
-				if testbed.training_step >= n_steps:
-					if args.gui:
-						testbed.shall_train = False
-					else:
-						break
-
-				# Update progress bar
-				if testbed.training_step < old_training_step or old_training_step == 0:
-					old_training_step = 0
-					t.reset()
-
-				now = time.monotonic()
-				if now - tqdm_last_update > 0.1:
-					t.update(testbed.training_step - old_training_step)
-					t.set_postfix(loss=testbed.loss)
-					old_training_step = testbed.training_step
-					tqdm_last_update = now
+					now = time.monotonic()
+					if now - tqdm_last_update > 0.1:
+						t.update(testbed.training_step - old_training_step)
+						t.set_postfix(loss=testbed.loss)
+						old_training_step = testbed.training_step
+						tqdm_last_update = now
 
 	print(f"Save snapshot consumed: {snapshot_save_time}")
 
