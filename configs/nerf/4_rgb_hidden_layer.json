@@ -1,0 +1,6 @@
+{
+	"parent": "base.json",
+	"rgb_network": {
+		"n_hidden_layers": 4
+	}
+}
