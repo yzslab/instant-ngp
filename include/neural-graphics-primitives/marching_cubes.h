@@ -18,9 +18,9 @@
 
 NGP_NAMESPACE_BEGIN
 
-Eigen::Vector3i get_marching_cubes_res(uint32_t res_1d, const BoundingBox &aabb);
+Eigen::Vector3i get_marching_cubes_res(uint32_t res_1d, const BoundingBox& render_aabb);
 
-void marching_cubes_gpu(cudaStream_t stream, BoundingBox aabb, Eigen::Vector3i res_3d, float thresh, const tcnn::GPUMemory<float>& density, tcnn::GPUMemory<Eigen::Vector3f>& vert_out, tcnn::GPUMemory<uint32_t>& indices_out);
+void marching_cubes_gpu(cudaStream_t stream, BoundingBox render_aabb, Eigen::Matrix3f render_aabb_to_local, Eigen::Vector3i res_3d, float thresh, const tcnn::GPUMemory<float>& density, tcnn::GPUMemory<Eigen::Vector3f>& vert_out, tcnn::GPUMemory<uint32_t>& indices_out);
 
 // computes the average of the 1ring of all verts, as homogenous coordinates
 void compute_mesh_1ring(const tcnn::GPUMemory<Eigen::Vector3f>& verts, const tcnn::GPUMemory<uint32_t>& indices, tcnn::GPUMemory<Eigen::Vector4f>& output_pos, tcnn::GPUMemory<Eigen::Vector3f>& output_normals);
@@ -62,6 +62,10 @@ void draw_mesh_gl(
 	const Eigen::Vector2f& screen_center,
 	int mesh_render_mode
 );
+
+void glCheckError(const char* file, unsigned int line);
+uint32_t compile_shader(bool pixel, const char* code);
+bool check_shader(uint32_t handle, const char* desc, bool program);
 #endif
 
 void save_density_grid_to_png(const tcnn::GPUMemory<float>& density, const char* filename, Eigen::Vector3i res3d, float thresh, bool swap_y_z = true, float density_range = 4.f);

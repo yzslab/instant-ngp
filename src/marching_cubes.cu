@@ -54,30 +54,28 @@ Vector3i get_marching_cubes_res(uint32_t res_1d, const BoundingBox &aabb) {
 }
 
 #ifdef NGP_GUI
-
 void glCheckError(const char* file, unsigned int line) {
-  GLenum errorCode = glGetError();
-  while (errorCode != GL_NO_ERROR) {
-    std::string fileString(file);
-    std::string error = "unknown error";
-    // clang-format off
-    switch (errorCode) {
-      case GL_INVALID_ENUM:      error = "GL_INVALID_ENUM"; break;
-      case GL_INVALID_VALUE:     error = "GL_INVALID_VALUE"; break;
-      case GL_INVALID_OPERATION: error = "GL_INVALID_OPERATION"; break;
-      case GL_STACK_OVERFLOW:    error = "GL_STACK_OVERFLOW"; break;
-      case GL_STACK_UNDERFLOW:   error = "GL_STACK_UNDERFLOW"; break;
-      case GL_OUT_OF_MEMORY:     error = "GL_OUT_OF_MEMORY"; break;
-    }
-    // clang-format on
+	GLenum errorCode = glGetError();
+	while (errorCode != GL_NO_ERROR) {
+		std::string fileString(file);
+		std::string error = "unknown error";
+		// clang-format off
+		switch (errorCode) {
+			case GL_INVALID_ENUM:      error = "GL_INVALID_ENUM"; break;
+			case GL_INVALID_VALUE:     error = "GL_INVALID_VALUE"; break;
+			case GL_INVALID_OPERATION: error = "GL_INVALID_OPERATION"; break;
+			case GL_STACK_OVERFLOW:    error = "GL_STACK_OVERFLOW"; break;
+			case GL_STACK_UNDERFLOW:   error = "GL_STACK_UNDERFLOW"; break;
+			case GL_OUT_OF_MEMORY:     error = "GL_OUT_OF_MEMORY"; break;
+		}
+		// clang-format on
 
-    tlog::error() << "OpenglError : file=" << file << " line=" << line << " error:" << error;
-    errorCode = glGetError();
-  }
+		tlog::error() << "OpenglError : file=" << file << " line=" << line << " error:" << error;
+		errorCode = glGetError();
+	}
 }
 
-
-bool check_shader(GLuint handle, const char* desc, bool program) {
+bool check_shader(uint32_t handle, const char* desc, bool program) {
 	GLint status = 0, log_length = 0;
 	if (program) {
 		glGetProgramiv(handle, GL_LINK_STATUS, &status);
@@ -102,7 +100,7 @@ bool check_shader(GLuint handle, const char* desc, bool program) {
 	return (GLboolean)status == GL_TRUE;
 }
 
-GLuint compile_shader(bool pixel, const char* code) {
+uint32_t compile_shader(bool pixel, const char* code) {
 	GLuint g_VertHandle = glCreateShader(pixel ? GL_FRAGMENT_SHADER : GL_VERTEX_SHADER );
 	const char* glsl_version = "#version 330\n";
 	const GLchar* strings[2] = { glsl_version, code};
@@ -273,13 +271,13 @@ with z=1
 
 edges 8-11 go in +z direction from vertex 0-3
 */
-__global__ void gen_vertices(BoundingBox aabb, Vector3i res_3d, const float* __restrict__ density, int*__restrict__ vertidx_grid, Vector3f* verts_out, float thresh, uint32_t* __restrict__ counters) {
+__global__ void gen_vertices(BoundingBox render_aabb, Matrix3f render_aabb_to_local, Vector3i res_3d, const float* __restrict__ density, int*__restrict__ vertidx_grid, Vector3f* verts_out, float thresh, uint32_t* __restrict__ counters) {
 	uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
 	uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
 	uint32_t z = blockIdx.z * blockDim.z + threadIdx.z;
 	if (x>=res_3d.x() || y>=res_3d.y() || z>=res_3d.z()) return;
-	Vector3f scale=(aabb.max-aabb.min).cwiseQuotient(res_3d.cast<float>());
-	Vector3f offset=aabb.min;
+	Vector3f scale=(render_aabb.max-render_aabb.min).cwiseQuotient(res_3d.cast<float>());
+	Vector3f offset=render_aabb.min;
 	uint32_t res2=res_3d.x()*res_3d.y();
 	uint32_t res3=res_3d.x()*res_3d.y()*res_3d.z();
 	uint32_t idx=x+y*res_3d.x()+z*res2;
@@ -293,7 +291,7 @@ __global__ void gen_vertices(BoundingBox aabb, Vector3i res_3d, const float* __r
 				vertidx_grid[idx]=vidx+1;
 				float prevf=f0,nextf=f1;
 				float dt=((thresh-prevf)/(nextf-prevf));
-				verts_out[vidx]=Vector3f{float(x)+dt, float(y), float(z)}.cwiseProduct(scale) + offset;
+				verts_out[vidx]=render_aabb_to_local.transpose() * (Vector3f{float(x)+dt, float(y), float(z)}.cwiseProduct(scale) + offset);
 			}
 		}
 	}
@@ -305,7 +303,7 @@ __global__ void gen_vertices(BoundingBox aabb, Vector3i res_3d, const float* __r
 				vertidx_grid[idx+res3]=vidx+1;
 				float prevf=f0,nextf=f1;
 				float dt=((thresh-prevf)/(nextf-prevf));
-				verts_out[vidx]=Vector3f{float(x), float(y)+dt, float(z)}.cwiseProduct(scale) + offset;
+				verts_out[vidx]=render_aabb_to_local.transpose() * (Vector3f{float(x), float(y)+dt, float(z)}.cwiseProduct(scale) + offset);
 			}
 		}
 	}
@@ -317,7 +315,7 @@ __global__ void gen_vertices(BoundingBox aabb, Vector3i res_3d, const float* __r
 				vertidx_grid[idx+res3*2]=vidx+1;
 				float prevf=f0,nextf=f1;
 				float dt=((thresh-prevf)/(nextf-prevf));
-				verts_out[vidx]=Vector3f{float(x), float(y), float(z)+dt}.cwiseProduct(scale) + offset;
+				verts_out[vidx]=render_aabb_to_local.transpose() * (Vector3f{float(x), float(y), float(z)+dt}.cwiseProduct(scale) + offset);
 			}
 		}
 	}
@@ -786,7 +784,7 @@ void compute_mesh_opt_gradients(
 	);
 }
 
-void marching_cubes_gpu(cudaStream_t stream, BoundingBox aabb, Vector3i res_3d, float thresh, const tcnn::GPUMemory<float>& density, tcnn::GPUMemory<Vector3f>& verts_out, tcnn::GPUMemory<uint32_t>& indices_out) {
+void marching_cubes_gpu(cudaStream_t stream, BoundingBox render_aabb, Matrix3f render_aabb_to_local, Vector3i res_3d, float thresh, const tcnn::GPUMemory<float>& density, tcnn::GPUMemory<Vector3f>& verts_out, tcnn::GPUMemory<uint32_t>& indices_out) {
 	GPUMemory<uint32_t> counters;
 
 	counters.enlarge(4);
@@ -801,7 +799,7 @@ void marching_cubes_gpu(cudaStream_t stream, BoundingBox aabb, Vector3i res_3d, 
 	const dim3 threads = { 4, 4, 4 };
 	const dim3 blocks = { div_round_up((uint32_t)res_3d.x(), threads.x), div_round_up((uint32_t)res_3d.y(), threads.y), div_round_up((uint32_t)res_3d.z(), threads.z) };
 	// count only
-	gen_vertices<<<blocks, threads, 0>>>(aabb, res_3d, density.data(), nullptr, nullptr, thresh, counters.data());
+	gen_vertices<<<blocks, threads, 0>>>(render_aabb, render_aabb_to_local, res_3d, density.data(), nullptr, nullptr, thresh, counters.data());
 	gen_faces<<<blocks, threads, 0>>>(res_3d, density.data(), nullptr, nullptr, thresh, counters.data());
 	std::vector<uint32_t> cpucounters; cpucounters.resize(4);
 	counters.copy_to_host(cpucounters);
@@ -812,7 +810,7 @@ void marching_cubes_gpu(cudaStream_t stream, BoundingBox aabb, Vector3i res_3d, 
 	verts_out.memset(0);
 	indices_out.resize(cpucounters[1]);
 	// actually generate verts
-	gen_vertices<<<blocks, threads, 0>>>(aabb, res_3d, density.data(), vertex_grid, verts_out.data(), thresh, counters.data()+2);
+	gen_vertices<<<blocks, threads, 0>>>(render_aabb, render_aabb_to_local, res_3d, density.data(), vertex_grid, verts_out.data(), thresh, counters.data()+2);
 	gen_faces<<<blocks, threads, 0>>>(res_3d, density.data(), vertex_grid, indices_out.data(), thresh, counters.data()+2);
 }
 

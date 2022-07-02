@@ -223,9 +223,16 @@ inline __host__ __device__ Ray pixel_to_ray_pinhole(
 	return {origin, dir};
 }
 
-inline __host__ __device__ Eigen::Matrix<float, 3, 4> get_xform_given_rolling_shutter(const TrainingXForm &training_xform, const Eigen::Vector4f &rolling_shutter, const Eigen::Vector2f &uv, float motionblur_time) {
+inline __host__ __device__ Eigen::Matrix<float, 3, 4> get_xform_given_rolling_shutter(const TrainingXForm& training_xform, const Eigen::Vector4f& rolling_shutter, const Eigen::Vector2f& uv, float motionblur_time) {
 	float pixel_t = rolling_shutter.x() + rolling_shutter.y() * uv.x() + rolling_shutter.z() * uv.y() + rolling_shutter.w() * motionblur_time;
-	return training_xform.start + (training_xform.end - training_xform.start) * pixel_t;
+
+	Eigen::Vector3f pos = training_xform.start.col(3) + (training_xform.end.col(3) - training_xform.start.col(3)) * pixel_t;
+	Eigen::Quaternionf rot = Eigen::Quaternionf(training_xform.start.block<3, 3>(0, 0)).slerp(pixel_t, Eigen::Quaternionf(training_xform.end.block<3, 3>(0, 0)));
+
+	Eigen::Matrix<float, 3, 4> rv;
+	rv.col(3) = pos;
+	rv.block<3, 3>(0, 0) = Eigen::Quaternionf(rot).normalized().toRotationMatrix();
+	return rv;
 }
 
 inline __host__ __device__ Eigen::Vector3f f_theta_undistortion(const Eigen::Vector2f& uv, const float* params, const Eigen::Vector3f& error_direction) {
@@ -241,6 +248,15 @@ inline __host__ __device__ Eigen::Vector3f f_theta_undistortion(const Eigen::Vec
 	}
 	sin_alpha *= 1.f / norm;
 	return { sin_alpha * xpix, sin_alpha * ypix, cos_alpha };
+}
+
+inline __host__ __device__ Eigen::Vector3f latlong_to_dir(const Eigen::Vector2f& uv) {
+	float theta=(uv.y()-0.5f) * PI();
+	float phi = (uv.x()-0.5f) * (PI()*2.f);
+	float sp,cp,st,ct;
+	sincosf(theta, &st, &ct);
+	sincosf(phi, &sp, &cp);
+	return { sp * ct , st, cp * ct };
 }
 
 inline __host__ __device__ Ray pixel_to_ray(
@@ -267,6 +283,8 @@ inline __host__ __device__ Ray pixel_to_ray(
 		if (dir.x() == 1000.f) {
 			return {{1000.f, 0.f, 0.f}, {0.f, 0.f, 1.f}}; // return a point outside the aabb so the pixel is not rendered
 		}
+	} else if (camera_distortion.mode == ECameraDistortionMode::LatLong) {
+		dir = latlong_to_dir(uv);
 	} else {
 		dir = {
 			(uv.x() - screen_center.x()) * (float)resolution.x() / focal_length.x(),
@@ -322,6 +340,8 @@ inline __host__ __device__ Eigen::Vector2f pos_to_pixel(
 		dir.x() += du;
 		dir.y() += dv;
 	} else if (camera_distortion.mode == ECameraDistortionMode::FTheta) {
+		assert(false);
+	}  else if (camera_distortion.mode == ECameraDistortionMode::LatLong) {
 		assert(false);
 	}
 

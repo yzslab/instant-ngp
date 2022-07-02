@@ -50,7 +50,6 @@ template <typename T, typename PARAMS_T, typename COMPUTE_T> class Trainer;
 template <uint32_t N_DIMS, uint32_t RANK, typename T> class TrainableBuffer;
 TCNN_NAMESPACE_END
 
-
 NGP_NAMESPACE_BEGIN
 
 template <typename T> class NerfNetwork;
@@ -143,6 +142,7 @@ public:
 			Eigen::Vector3f parallax_shift,
 			bool snap_to_pixel_centers,
 			const BoundingBox& render_aabb,
+			const Eigen::Matrix3f& render_aabb_to_local,
 			float plane_z,
 			float dof,
 			const CameraDistortion& camera_distortion,
@@ -162,6 +162,7 @@ public:
 		uint32_t trace(
 			NerfNetwork<precision_t>& network,
 			const BoundingBox& render_aabb,
+			const Eigen::Matrix3f& render_aabb_to_local,
 			const BoundingBox& train_aabb,
 			const uint32_t n_training_images,
 			const TrainingXForm* training_xforms,
@@ -331,10 +332,10 @@ public:
 	Eigen::Vector2f render_screen_center() const ;
 	void optimise_mesh_step(uint32_t N_STEPS);
 	void compute_mesh_vertex_colors();
-	tcnn::GPUMemory<float> get_density_on_grid(Eigen::Vector3i res3d, const BoundingBox& aabb); // network version (nerf or sdf)
-	tcnn::GPUMemory<float> get_sdf_gt_on_grid(Eigen::Vector3i res3d, const BoundingBox& aabb); // sdf gt version (sdf only)
+	tcnn::GPUMemory<float> get_density_on_grid(Eigen::Vector3i res3d, const BoundingBox& aabb, const Eigen::Matrix3f& render_aabb_to_local); // network version (nerf or sdf)
+	tcnn::GPUMemory<float> get_sdf_gt_on_grid(Eigen::Vector3i res3d, const BoundingBox& aabb, const Eigen::Matrix3f& render_aabb_to_local); // sdf gt version (sdf only)
 	tcnn::GPUMemory<Eigen::Array4f> get_rgba_on_grid(Eigen::Vector3i res3d, Eigen::Vector3f ray_dir);
-	int marching_cubes(Eigen::Vector3i res3d, const BoundingBox& aabb, float thresh);
+	int marching_cubes(Eigen::Vector3i res3d, const BoundingBox& render_aabb, const Eigen::Matrix3f& render_aabb_to_local, float thresh);
 
 	// Determines the 3d focus point by rendering a little 16x16 depth image around
 	// the mouse cursor and picking the median depth.
@@ -356,7 +357,7 @@ public:
 	void draw_visualizations(ImDrawList* list, const Eigen::Matrix<float, 3, 4>& camera_matrix);
 	void train_and_render(bool skip_rendering);
 	filesystem::path training_data_path() const;
-	void init_window(int resw, int resh, bool hidden = false);
+	void init_window(int resw, int resh, bool hidden = false, bool second_window = false);
 	void destroy_window();
 	void apply_camera_smoothing(float elapsed_ms);
 	int find_best_training_view(int default_view);
@@ -467,10 +468,18 @@ public:
 	EMeshRenderMode m_mesh_render_mode = EMeshRenderMode::VertexNormals;
 
 	uint32_t m_seed = 1337;
-
 #ifdef NGP_GUI
-
 	GLFWwindow* m_glfw_window = nullptr;
+	struct SecondWindow {
+		GLFWwindow* window = nullptr;
+		GLuint program = 0;
+		GLuint vao = 0, vbo = 0;
+		void draw(GLuint texture);
+	} m_second_window;
+
+	void create_second_window();
+
+	std::function<bool()> m_keyboard_event_callback;
 
 	std::shared_ptr<GLTexture> m_pip_render_texture;
 	std::vector<std::shared_ptr<GLTexture>> m_render_textures;
@@ -507,8 +516,6 @@ public:
 				bool is_cdf_valid = false;
 			} error_map;
 
-			tcnn::GPUMemory<TrainingImageMetadata> metadata_gpu;
-
 			std::vector<TrainingXForm> transforms;
 			tcnn::GPUMemory<TrainingXForm> transforms_gpu;
 
@@ -537,6 +544,8 @@ public:
 			void reset_extra_dims(default_rng_t &rng);
 
 			float extrinsic_l2_reg = 1e-4f;
+			float extrinsic_learning_rate = 1e-3f;
+
 			float intrinsic_l2_reg = 1e-4f;
 			float exposure_l2_reg = 0.0f;
 
@@ -559,6 +568,7 @@ public:
 			bool random_bg_color = true;
 			bool linear_colors = false;
 			ELossType loss_type = ELossType::L2;
+			ELossType depth_loss_type = ELossType::L1;
 			bool snap_to_pixel_centers = true;
 			bool train_envmap = false;
 
@@ -588,9 +598,9 @@ public:
 			tcnn::GPUMemory<float> sharpness_grid;
 
 			void set_camera_intrinsics(int frame_idx, float fx, float fy = 0.0f, float cx = -0.5f, float cy = -0.5f, float k1 = 0.0f, float k2 = 0.0f, float p1 = 0.0f, float p2 = 0.0f);
-			void set_camera_extrinsics(int frame_idx, const Eigen::Matrix<float, 3, 4>& camera_to_world);
+			void set_camera_extrinsics_rolling_shutter(int frame_idx, Eigen::Matrix<float, 3, 4> camera_to_world_start, Eigen::Matrix<float, 3, 4> camera_to_world_end, const Eigen::Vector4f& rolling_shutter, bool convert_to_ngp = true);
+			void set_camera_extrinsics(int frame_idx, Eigen::Matrix<float, 3, 4> camera_to_world, bool convert_to_ngp = true);
 			Eigen::Matrix<float, 3, 4> get_camera_extrinsics(int frame_idx);
-			void update_metadata(int first = 0, int last = -1);
 			void update_transforms(int first = 0, int last = -1);
 
 #ifdef NGP_PYTHON
@@ -599,7 +609,6 @@ public:
 
 			void reset_camera_extrinsics();
 			void export_camera_extrinsics(const std::string& filename, bool export_extrinsics_in_quat_format = true);
-
 		} training = {};
 
 		tcnn::GPUMemory<float> density_grid; // NERF_GRIDSIZE()^3 grid of EMA smoothed densities from the network
@@ -647,7 +656,6 @@ public:
 		BRDFParams brdf;
 
 		FiniteDifferenceNormalsApproximator fd_normals;
-
 
 		// Mesh data
 		EMeshSdfMode mesh_sdf_mode = EMeshSdfMode::Raystab;
@@ -764,6 +772,7 @@ public:
 	BoundingBox m_raw_aabb;
 	BoundingBox m_aabb;
 	BoundingBox m_render_aabb;
+	Eigen::Matrix3f m_render_aabb_to_local;
 
 	// Rendering/UI bookkeeping
 	Ema m_training_prep_ms = {EEmaType::Time, 100};
@@ -787,6 +796,7 @@ public:
 	bool m_imgui_enabled = true; // tab to toggle
 	bool m_visualize_unit_cube = false;
 	bool m_snap_to_pixel_centers = false;
+	bool m_edit_render_aabb = false;
 
 	Eigen::Vector2f m_parallax_shift = {0.f, 0.f}; // to shift the viewer's head position by some amount parallel to the screen
 	Eigen::Vector3f get_scaled_parallax_shift() const { return {m_parallax_shift.x(), m_parallax_shift.y(), m_scale}; } // pack m_scale into the parallax parameter so we know where the screen plane is.
