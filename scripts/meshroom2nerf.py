@@ -9,7 +9,7 @@ import math
 def parse_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--sfmfile", required=True, help="path to cameras.sfm file")
-	parser.add_argument("--outfile", required=True, help="path to save NeRF transforms json file")
+	parser.add_argument("--outdir", required=True, help="path to save NeRF transforms json file")
 	parser.add_argument("--imgpath", required=True, help="images path relative to transforms json file")
 	args = parser.parse_args()
 	return args
@@ -169,8 +169,17 @@ print("avg camera distance from origin", avglen)
 for f in frames:
 	f["transform_matrix"][0:3, 3] *= 4.0 / avglen  # scale to "nerf sized"
 
+train_frames = []
+test_frames = []
+
 for f in frames:
 	f["transform_matrix"] = f["transform_matrix"].tolist()
+	# image_no = int(os.path.basename(f["file_path"]).replace(".jpg", ""))
+	# if image_no > 0 and image_no < len(frames) - 1 and image_no % 3 == 0:
+	# 	test_frames.append(f)
+	# else:
+	# 	train_frames.append(f)
+train_frames = frames
 
 intrinsics = sfm["intrinsics"][0]
 
@@ -201,8 +210,13 @@ out = {
 	"w": w,
 	"h": h,
 	"aabb_scale": 16,
-	"frames": frames,
+	"frames": train_frames,
 }
 
-with open(args.outfile, "w") as f:
+
+with open(os.path.join(args.outdir, "transforms_meshroom.json"), "w") as f:
 	json.dump(out, f, indent=4)
+
+# out["frames"] = test_frames
+# with open(os.path.join(args.outdir, "transforms_meshroom_test.json"), "w") as f:
+# 	json.dump(out, f, indent=4)

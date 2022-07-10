@@ -19,6 +19,7 @@ def parse_args():
 
 	parser.add_argument("--scene_dir", default="")
 	parser.add_argument("--filename", default="transforms.json")
+	parser.add_argument("--name", default="")
 	parser.add_argument("--snapshots", nargs="*")
 	parser.add_argument("--frames", nargs="*")
 	parser.add_argument("--spp", default=16)
@@ -34,7 +35,7 @@ if __name__ == "__main__":
 
 	snapshotList = []
 	if not args.snapshots:
-		for filename in os.scandir(args.scene_dir + "/snapshots"):
+		for filename in os.scandir(args.scene_dir + "/snapshots/" + args.name):
 			if filename.name.startswith('.') and filename.is_dir():
 				continue
 			snapshotList.append(filename.name)
@@ -56,7 +57,7 @@ if __name__ == "__main__":
 			frameList[os.path.basename(j["file_path"])] = j
 
 	for snapshot in snapshotList:
-		filepath = args.scene_dir + "/snapshots/" + snapshot
+		filepath = args.scene_dir + "/snapshots/" + args.name + "/" + snapshot
 		name = snapshot.replace(".msgpack", "")
 
 		mode = ngp.TestbedMode.Nerf
@@ -89,7 +90,8 @@ if __name__ == "__main__":
 			testbed.set_nerf_camera_matrix(np.matrix(cam_matrix)[:-1, :])
 			os.makedirs(os.path.join(args.scene_dir, "screenshots"), exist_ok=True)
 			os.makedirs(os.path.join(args.scene_dir, "screenshots", name), exist_ok=True)
-			outname = os.path.join(args.scene_dir, "screenshots", name, screenshot_name)
+			os.makedirs(os.path.join(args.scene_dir, "screenshots", name, args.name), exist_ok=True)
+			outname = os.path.join(args.scene_dir, "screenshots", name, args.name, screenshot_name)
 
 			# Some NeRF datasets lack the .png suffix in the dataset metadata
 			if not os.path.splitext(outname)[1]:

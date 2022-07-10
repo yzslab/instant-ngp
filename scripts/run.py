@@ -19,7 +19,7 @@ import time
 import datetime
 
 from common import *
-from scenes import scenes_nerf, scenes_image, scenes_sdf, scenes_volume, setup_colored_sdf
+from scenes import *
 
 from tqdm import tqdm
 
@@ -78,17 +78,9 @@ def parse_args():
 if __name__ == "__main__":
 	args = parse_args()
 
-	if args.mode == "":
-		if args.scene in scenes_sdf:
-			args.mode = "sdf"
-		elif args.scene in scenes_nerf:
-			args.mode = "nerf"
-		elif args.scene in scenes_image:
-			args.mode = "image"
-		elif args.scene in scenes_volume:
-			args.mode = "volume"
-		else:
-			raise ValueError("Must specify either a valid '--mode' or '--scene' argument.")
+	args.mode = args.mode or mode_from_scene(args.scene) or mode_from_scene(args.load_snapshot)
+	if not args.mode:
+		raise ValueError("Must specify either a valid '--mode' or '--scene' argument.")
 
 	if args.mode == "sdf":
 		mode = ngp.TestbedMode.Sdf
@@ -140,12 +132,17 @@ if __name__ == "__main__":
 
 
 	if args.load_snapshot:
-		print("Loading snapshot ", args.load_snapshot)
+		snapshot = args.load_snapshot
+
 		if os.path.exists(args.load_snapshot) == False:
 			args.load_snapshot = os.path.join(os.path.dirname(args.scene), "snapshots", args.name, args.load_snapshot)
 		if os.path.exists(args.load_snapshot) == False:
 			args.load_snapshot = args.load_snapshot + ".msgpack"
-		testbed.load_snapshot(args.load_snapshot)
+		if not os.path.exists(snapshot) and snapshot in scenes:
+			snapshot = default_snapshot_filename(scenes[snapshot])
+
+		print("Loading snapshot ", snapshot)
+		testbed.load_snapshot(snapshot)
 	else:
 		testbed.reload_network_from_file(network)
 
