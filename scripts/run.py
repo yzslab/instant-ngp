@@ -132,12 +132,12 @@ if __name__ == "__main__":
 
 
 	if args.load_snapshot:
-		snapshot = args.load_snapshot
-
 		if os.path.exists(args.load_snapshot) == False:
 			args.load_snapshot = os.path.join(os.path.dirname(args.scene), "snapshots", args.name, args.load_snapshot)
 		if os.path.exists(args.load_snapshot) == False:
 			args.load_snapshot = args.load_snapshot + ".msgpack"
+
+		snapshot = args.load_snapshot
 		if not os.path.exists(snapshot) and snapshot in scenes:
 			snapshot = default_snapshot_filename(scenes[snapshot])
 
@@ -307,7 +307,7 @@ if __name__ == "__main__":
 		maxpsnr = 0
 
 		# Evaluate metrics on black background
-		testbed.background_color = [0.0, 0.0, 0.0, 0.0]
+		testbed.background_color = [0.0, 0.0, 0.0, 1.0]
 
 		# Prior nerf papers don't typically do multi-sample anti aliasing.
 		# So snap all pixels to the pixel centers.
@@ -360,9 +360,11 @@ if __name__ == "__main__":
 						ref_image += (1.0 - ref_image[...,3:4]) * testbed.background_color
 						ref_image[...,:3] = srgb_to_linear(ref_image[...,:3])
 
+					filename = os.path.basename(frame["file_path"])
+
 					testbed.set_nerf_camera_matrix(np.matrix(frame["transform_matrix"])[:-1,:])
 					image = testbed.render(ref_image.shape[1], ref_image.shape[0], spp, True)
-
+					write_image(os.path.join(save_dir, "{}_out.png".format(filename)), image)
 
 					if ref_image.shape[2] == 3:
 						image = image[:, :, :-1]
@@ -370,9 +372,7 @@ if __name__ == "__main__":
 					diffimg = np.absolute(image - ref_image)
 					diffimg[...,3:4] = 1.0
 
-					filename = os.path.basename(frame["file_path"])
 					write_image(os.path.join(save_dir, "{}_ref.png".format(filename)), ref_image)
-					write_image(os.path.join(save_dir, "{}_out.png".format(filename)), image)
 					write_image(os.path.join(save_dir, "{}_diff.png".format(filename)), diffimg)
 
 					A = np.clip(linear_to_srgb(image[...,:3]), 0.0, 1.0)
