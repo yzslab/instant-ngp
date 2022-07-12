@@ -71,6 +71,7 @@ def parse_args():
 
 	parser.add_argument("--sharpen", default=0, help="Set amount of sharpening applied to NeRF training images.")
 
+	parser.add_argument("--train_extrinsics", action="store_true", help="Enable extrinsics optimizer")
 
 	args = parser.parse_args()
 	return args
@@ -164,6 +165,9 @@ if __name__ == "__main__":
 	if args.near_distance >= 0.0:
 		print("NeRF training ray near_distance ", args.near_distance)
 		testbed.nerf.training.near_distance = args.near_distance
+	if args.train_extrinsics:
+		print("Train extrinsics")
+		testbed.nerf.training.optimize_extrinsics = True
 
 	if args.nerf_compatibility:
 		print(f"NeRF compatibility mode enabled")
