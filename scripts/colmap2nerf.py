@@ -38,6 +38,10 @@ def parse_args():
 	parser.add_argument("--keep_colmap_coords", action="store_true", help="keep transforms.json in COLMAP's original frame of reference (this will avoid reorienting and repositioning the scene for preview and rendering)")
 	parser.add_argument("--out", default="transforms.json", help="output path")
 	parser.add_argument("--vocab_path", default="", help="vocabulary tree path")
+
+	parser.add_argument("--down_scale", default=1)
+	parser.add_argument("--scene_scale", default=4.0)
+
 	args = parser.parse_args()
 	return args
 
@@ -166,6 +170,7 @@ if __name__ == "__main__":
 	IMAGE_FOLDER = args.images
 	TEXT_FOLDER = args.text
 	OUT_PATH = args.out
+	down_scale = int(args.down_scale)
 	print(f"outputting to {OUT_PATH}...")
 	with open(os.path.join(TEXT_FOLDER,"cameras.txt"), "r") as f:
 		angle_x = math.pi / 2
@@ -176,8 +181,8 @@ if __name__ == "__main__":
 			if line[0] == "#":
 				continue
 			els = line.split(" ")
-			w = float(els[2])
-			h = float(els[3])
+			w = float(els[2]) // down_scale
+			h = float(els[3]) // down_scale
 			fl_x = float(els[4])
 			fl_y = float(els[4])
 			k1 = 0
@@ -212,6 +217,12 @@ if __name__ == "__main__":
 				p2 = float(els[11])
 			else:
 				print("unknown camera model ", els[1])
+
+			if down_scale > 1:
+				fl_x = fl_x / down_scale
+				fl_y = fl_y / down_scale
+				cx = cx / down_scale
+				cy = cy / down_scale
 			# fl = 0.5 * w / tan(0.5 * angle_x);
 			angle_x = math.atan(w / (fl_x * 2)) * 2
 			angle_y = math.atan(h / (fl_y * 2)) * 2
@@ -320,7 +331,7 @@ if __name__ == "__main__":
 		avglen /= nframes
 		print("avg camera distance from origin", avglen)
 		for f in out["frames"]:
-			f["transform_matrix"][0:3,3] *= 4.0 / avglen # scale to "nerf sized"
+			f["transform_matrix"][0:3,3] *= float(args.scene_scale) / avglen # scale to "nerf sized"
 
 	for f in out["frames"]:
 		f["transform_matrix"] = f["transform_matrix"].tolist()
