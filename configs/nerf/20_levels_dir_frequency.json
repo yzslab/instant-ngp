@@ -1,0 +1,12 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 20
+	},
+	"dir_encoding": {
+		"otype": "Frequency",
+		"n_frequencies": 4
+	}
+}
+

@@ -1,0 +1,9 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"log2_hashmap_size": 21
+	},
+	"rgb_network": {
+		"n_hidden_layers": 3
+	}
+}

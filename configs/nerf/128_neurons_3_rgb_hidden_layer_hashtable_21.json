@@ -1,0 +1,18 @@
+{
+	"parent": "base.json",
+	"network": {
+		"n_neurons": 128
+	},
+	"rgb_network": {
+		"n_neurons": 128,
+		"n_hidden_layers": 3
+	},
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 16,
+		"n_features_per_level": 2,
+		"log2_hashmap_size": 21,
+		"base_resolution": 16
+	}
+}
+

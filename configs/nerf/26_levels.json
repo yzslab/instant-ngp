@@ -1,0 +1,8 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 26
+	}
+}
+

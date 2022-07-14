@@ -1,0 +1,9 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 24,
+		"log2_hashmap_size": 24
+	}
+}
+

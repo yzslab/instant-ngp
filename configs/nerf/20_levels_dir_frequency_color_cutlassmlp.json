@@ -1,0 +1,19 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 20
+	},
+	"dir_encoding": {
+		"otype": "Frequency",
+		"n_frequencies": 4
+	},
+	"rgb_network": {
+		"otype": "CutlassMLP",
+		"activation": "ReLU",
+		"output_activation": "None",
+		"n_neurons": 256,
+		"n_hidden_layers": 1
+	}
+}
+

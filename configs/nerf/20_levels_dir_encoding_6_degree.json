@@ -1,0 +1,23 @@
+{
+	"parent": "base.json",
+	"encoding": {
+		"otype": "HashGrid",
+		"n_levels": 20
+	},
+	"dir_encoding": {
+		"otype": "Composite",
+		"nested": [
+			{
+				"n_dims_to_encode": 3,
+				"otype": "SphericalHarmonics",
+				"degree": 6
+			},
+			{
+				"otype": "Identity",
+				"n_bins": 4,
+				"degree": 4
+			}
+		]
+	}
+}
+
