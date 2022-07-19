@@ -556,6 +556,7 @@ PYBIND11_MODULE(pyngp, m) {
 		.def_readwrite("optimize_exposure", &Testbed::Nerf::Training::optimize_exposure)
 		.def_readwrite("optimize_distortion", &Testbed::Nerf::Training::optimize_distortion)
 		.def_readwrite("optimize_focal_length", &Testbed::Nerf::Training::optimize_focal_length)
+		.def_readwrite("train_envmap", &Testbed::Nerf::Training::train_envmap)
 		.def_readwrite("n_steps_between_cam_updates", &Testbed::Nerf::Training::n_steps_between_cam_updates)
 		.def_readwrite("sample_focal_plane_proportional_to_error", &Testbed::Nerf::Training::sample_focal_plane_proportional_to_error)
 		.def_readwrite("sample_image_proportional_to_error", &Testbed::Nerf::Training::sample_image_proportional_to_error)
