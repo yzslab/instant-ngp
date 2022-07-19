@@ -72,6 +72,9 @@ def parse_args():
 	parser.add_argument("--sharpen", default=0, help="Set amount of sharpening applied to NeRF training images.")
 
 	parser.add_argument("--train_extrinsics", action="store_true", help="Enable extrinsics optimizer")
+	parser.add_argument("--train_exposure", action="store_true", help="Enable exposure optimizer")
+	parser.add_argument("--train_distortion", action="store_true", help="Enable distortion optimizer")
+	parser.add_argument("--train_envmap", action="store_true", help="Enable train envmap")
 
 	args = parser.parse_args()
 	return args
@@ -168,6 +171,15 @@ if __name__ == "__main__":
 	if args.train_extrinsics:
 		print("Train extrinsics")
 		testbed.nerf.training.optimize_extrinsics = True
+	if args.train_exposure:
+		print("Train exposure")
+		testbed.nerf.training.optimize_exposure = True
+	if args.train_distortion:
+		print("Train distortion")
+		testbed.nerf.training.optimize_distortion = True
+	if args.train_envmap:
+		print("Train envmap")
+		testbed.nerf.training.train_envmap = True
 
 	if args.nerf_compatibility:
 		print(f"NeRF compatibility mode enabled")
