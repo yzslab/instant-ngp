@@ -71,9 +71,12 @@ def parse_args():
 
 	parser.add_argument("--sharpen", default=0, help="Set amount of sharpening applied to NeRF training images.")
 
+	parser.add_argument("--cone_angle_constant", default=-1)
+
 	parser.add_argument("--train_extrinsics", action="store_true", help="Enable extrinsics optimizer")
 	parser.add_argument("--train_exposure", action="store_true", help="Enable exposure optimizer")
 	parser.add_argument("--train_distortion", action="store_true", help="Enable distortion optimizer")
+	parser.add_argument("--train_focal_length", action="store_true", help="Enable focal length optimizer")
 	parser.add_argument("--train_envmap", action="store_true", help="Enable train envmap")
 
 	args = parser.parse_args()
@@ -177,9 +180,16 @@ if __name__ == "__main__":
 	if args.train_distortion:
 		print("Train distortion")
 		testbed.nerf.training.optimize_distortion = True
+	if args.train_focal_length:
+		print("Train focal length")
+		testbed.nerf.training.optimize_focal_length = True
 	if args.train_envmap:
 		print("Train envmap")
 		testbed.nerf.training.train_envmap = True
+	cone_angle_constant = float(args.cone_angle_constant)
+	if cone_angle_constant >= 0:
+		print(f"cone_angle_constant={args.cone_angle_constant}")
+		testbed.nerf.cone_angle_constant = cone_angle_constant
 
 	if args.nerf_compatibility:
 		print(f"NeRF compatibility mode enabled")
