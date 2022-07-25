@@ -10,6 +10,8 @@ def parse_args():
 	p.add_argument("--mode", default="each")
 	p.add_argument("--each", default=3)
 	p.add_argument("--ranges", nargs="*")
+	p.add_argument("--replaces", nargs="*", default=[])
+	p.add_argument("--offset", default=0)
 
 	return p.parse_args()
 
@@ -50,7 +52,11 @@ with open(args.file, "r") as f:
 	transform = json.load(f)
 	frame_count = len(transform["frames"])
 	for frame in transform["frames"]:
-		file_no = int(os.path.basename(frame["file_path"]).replace(".jpg", ""))
+		file_no = os.path.basename(frame["file_path"]).replace(".JPG", "").replace(".jpg", "").replace(".PNG", "").replace(".png", "")
+		for replace in args.replaces:
+			file_no = file_no.replace(replace, "")
+		file_no = int(file_no)
+		file_no = file_no - int(args.offset)
 
 		if is_test_frame(frame_count, file_no):
 			test_frames.append(frame)
