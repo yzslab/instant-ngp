@@ -25,7 +25,7 @@
 #include <neural-graphics-primitives/shared_queue.h>
 #include <neural-graphics-primitives/trainable_buffer.cuh>
 
-#include <tiny-cuda-nn/cuda_graph.h>
+#include <tiny-cuda-nn/multi_stream.h>
 #include <tiny-cuda-nn/random.h>
 
 #include <json/json.hpp>
@@ -312,6 +312,10 @@ public:
 	Eigen::Vector3f view_up() const { return m_camera.col(1); }
 	Eigen::Vector3f view_side() const { return m_camera.col(0); }
 	void set_view_dir(const Eigen::Vector3f& dir);
+	void first_training_view();
+	void last_training_view();
+	void previous_training_view();
+	void next_training_view();
 	void set_camera_to_training_view(int trainview);
 	void reset_camera();
 	bool keyboard_event();
@@ -803,8 +807,7 @@ public:
 	Eigen::Vector3f get_scaled_parallax_shift() const { return {m_parallax_shift.x(), m_parallax_shift.y(), m_scale}; } // pack m_scale into the parallax parameter so we know where the screen plane is.
 
 	// CUDA stuff
-	cudaStream_t m_training_stream;
-	cudaStream_t m_inference_stream;
+	tcnn::StreamAndEvent m_stream;
 
 	// Hashgrid encoding analysis
 	float m_quant_percent = 0.f;

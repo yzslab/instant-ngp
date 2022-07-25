@@ -12,9 +12,9 @@
  *  @author Alex Evans, NVIDIA
  */
 
-#include <neural-graphics-primitives/common.h>
-#include <neural-graphics-primitives/common_device.cuh>
 #include <neural-graphics-primitives/bounding_box.cuh>
+#include <neural-graphics-primitives/common_device.cuh>
+#include <neural-graphics-primitives/common.h>
 #include <neural-graphics-primitives/random_val.cuh> // helpers to generate random values, directions
 #include <neural-graphics-primitives/thread_pool.h>
 
@@ -276,7 +276,7 @@ __global__ void gen_vertices(BoundingBox render_aabb, Matrix3f render_aabb_to_lo
 	uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
 	uint32_t z = blockIdx.z * blockDim.z + threadIdx.z;
 	if (x>=res_3d.x() || y>=res_3d.y() || z>=res_3d.z()) return;
-	Vector3f scale=(render_aabb.max-render_aabb.min).cwiseQuotient(res_3d.cast<float>());
+	Vector3f scale=(render_aabb.max-render_aabb.min).cwiseQuotient((res_3d-Vector3i::Ones()).cast<float>());
 	Vector3f offset=render_aabb.min;
 	uint32_t res2=res_3d.x()*res_3d.y();
 	uint32_t res3=res_3d.x()*res_3d.y()*res_3d.z();
